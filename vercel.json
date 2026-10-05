@@ -1,0 +1,9 @@
+{
+  "framework": null,
+  "outputDirectory": "public",
+  "functions": {
+    "api/[...path].js": {
+      "maxDuration": 60
+    }
+  }
+}

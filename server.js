@@ -14,7 +14,9 @@ const ai = require('./lib/ai');
 
 const PORT = +process.env.PORT || 3000;
 const CONCURRENCY = +process.env.CONCURRENCY || 10;
-const DATA_DIR = path.join(__dirname, 'data');
+const SERVERLESS = !!process.env.VERCEL;   // Vercel: tidak ada proses background & filesystem hanya-baca
+const DATA_DIR = SERVERLESS ? path.join(require('os').tmpdir(), 'idx-data') : path.join(__dirname, 'data');
+const SCAN_BUDGET = +process.env.SCAN_BUDGET_MS || 8000; // serverless: waktu maksimal scan per request
 const PUBLIC = path.join(__dirname, 'public');
 
 const codes = universe.load();
@@ -93,20 +95,25 @@ async function refreshOne(tf, code) {
   }
 }
 
-async function scan(tf) {
+async function scan(tf, budgetMs = Infinity) {
   const s = scans[tf];
-  if (s.running) return;
+  if (s.running) return s.promise;
+  s.promise = scanRun(tf, budgetMs).finally(() => { s.promise = null; });
+  return s.promise;
+}
+async function scanRun(tf, budgetMs) {
+  const s = scans[tf];
   const todo = codes.filter((code) => {
     const inv = invalid.get(code);
     if (inv && Date.now() - inv < 7 * 86400e3) return false;
     return !isFresh(store[tf].get(code), tf);
   });
-  if (!todo.length) return;
-  s.running = true; s.done = 0; s.total = todo.length;
-  const t0 = Date.now();
+  if (!todo.length) { s.pending = 0; return; }
+  s.running = true; s.done = 0; s.total = todo.length; s.pending = todo.length;
+  const t0 = Date.now(), deadline = t0 + budgetMs;
   let idx = 0, sinceSave = 0;
   const worker = async () => {
-    while (idx < todo.length) {
+    while (idx < todo.length && Date.now() < deadline) {
       const code = todo[idx++];
       await refreshOne(tf, code);
       s.done++;
@@ -114,10 +121,10 @@ async function scan(tf) {
     }
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-  s.running = false; s.finishedAt = Date.now();
+  s.running = false; s.finishedAt = Date.now(); s.pending = todo.length - idx;
   persist(tf); persistInvalid();
   console.log(`[scan ${tf}] ${todo.length} emiten dalam ${((Date.now() - t0) / 1000).toFixed(1)} dtk`);
-  if (tf === '1d') scanFundamentals().catch((e) => console.error(e));
+  if (tf === '1d' && !SERVERLESS) scanFundamentals().catch((e) => console.error(e));
 }
 
 // ---------- fundamental ----------
@@ -132,20 +139,21 @@ async function getFund(code) {
   try { fund[code] = await fetchFundamentals(code); } catch (e) { if (!fund[code]) return null; }
   return fund[code];
 }
-async function scanFundamentals() {
+async function scanFundamentals(budgetMs = Infinity) {
   if (fundScan.running) return;
   const todo = [...store['1d'].keys()].filter((c) => !fundFresh(fund[c]));
   if (!todo.length) return;
+  const deadline = Date.now() + budgetMs;
   fundScan.running = true; fundScan.done = 0; fundScan.total = todo.length;
   let idx = 0;
   const worker = async () => {
-    while (idx < todo.length) {
+    while (idx < todo.length && Date.now() < deadline) {
       const code = todo[idx++];
       try { fund[code] = await fetchFundamentals(code); } catch {}
       fundScan.done++;
     }
   };
-  await Promise.all(Array.from({ length: 4 }, worker));
+  await Promise.all(Array.from({ length: SERVERLESS ? 6 : 4 }, worker));
   fundScan.running = false;
   try { fs.writeFileSync(fundFile, JSON.stringify(fund)); } catch {}
   console.log(`[fundamental] ${todo.length} emiten diperbarui`);
@@ -168,7 +176,7 @@ function persistInvalid() {
   try { fs.writeFileSync(path.join(DATA_DIR, 'invalid.json'), JSON.stringify([...invalid])); } catch {}
 }
 function loadCache() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
   try { for (const [k, v] of JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'invalid.json'), 'utf8'))) invalid.set(k, v); } catch {}
   for (const tf of Object.keys(TF)) {
     try {
@@ -186,13 +194,24 @@ function loadCache() {
 
 function ensure(tf) {
   wanted[tf] = Date.now();
+  if (SERVERLESS) return; // di serverless scan dijalankan di dalam request (advance)
   const s = scans[tf];
   if (!s.running && Date.now() - s.finishedAt > 20e3) scan(tf).catch((e) => console.error(e));
 }
 
-setInterval(() => {
-  for (const tf of Object.keys(TF)) if (wanted[tf] && Date.now() - wanted[tf] < 30 * 60e3) ensure(tf);
-}, 60e3);
+if (!SERVERLESS) {
+  setInterval(() => {
+    for (const tf of Object.keys(TF)) if (wanted[tf] && Date.now() - wanted[tf] < 30 * 60e3) ensure(tf);
+  }, 60e3);
+}
+
+// Serverless: kerjakan sebagian scan di dalam request, sisanya di request polling berikutnya
+async function advance(tf) {
+  const t0 = Date.now();
+  const left = () => Math.max(0, SCAN_BUDGET - (Date.now() - t0));
+  await Promise.race([scan(tf, SCAN_BUDGET), new Promise((r) => setTimeout(r, SCAN_BUDGET + 2000))]);
+  if (tf === '1d' && left() > 1500 && !scans['1d'].pending) await scanFundamentals(left());
+}
 
 // ---------- API ----------
 function activeDivs(a) {
@@ -213,7 +232,9 @@ function screenerPayload(tf) {
     });
   }
   const s = scans[tf];
-  return { tf, asOf: at, marketOpen: marketOpen(), scan: { running: s.running, done: s.done, total: s.total }, total: codes.length, rows };
+  const pending = s.pending || 0;
+  const scanInfo = SERVERLESS ? { running: pending > 0, done: Math.max(0, (s.total || 0) - pending), total: s.total || 0 } : { running: s.running, done: s.done, total: s.total };
+  return { tf, asOf: at, marketOpen: marketOpen(), scan: scanInfo, total: codes.length, rows };
 }
 
 async function stockPayload(code, tf) {
@@ -286,18 +307,18 @@ function sendJson(req, res, status, obj) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+const handler = async (req, res) => {
   try {
     const u = new URL(req.url, 'http://x');
     const p = decodeURIComponent(u.pathname);
     if (p === '/api/screener') {
       const tf = TF[u.searchParams.get('tf')] ? u.searchParams.get('tf') : '1d';
-      ensure(tf);
+      if (SERVERLESS) await advance(tf); else ensure(tf);
       return sendJson(req, res, 200, screenerPayload(tf));
     }
     if (p.startsWith('/api/analysis/') || p.startsWith('/api/ai/')) {
       const isAi = p.startsWith('/api/ai/');
-      const code = p.slice(isAi ? 8 : 14).toUpperCase().replace(/.JK$/, '');
+      const code = p.slice(isAi ? 8 : 14).toUpperCase().replace(/\.JK$/, '');
       const tf = TF[u.searchParams.get('tf')] ? u.searchParams.get('tf') : '1d';
       if (!/^[A-Z0-9]{2,6}$/.test(code)) return sendJson(req, res, 400, { error: 'kode tidak valid' });
       const an = await buildAnalysis(code, tf);
@@ -329,12 +350,15 @@ const server = http.createServer(async (req, res) => {
     console.error(e);
     sendJson(req, res, 500, { error: e.message });
   }
-});
+};
 
 loadCache();
 loadFund();
-server.listen(PORT, () => {
-  console.log(`Dashboard IDX: http://localhost:${PORT}  (${codes.length} emiten di universe)`);
-  ensure('1d');
-  setTimeout(() => scanFundamentals().catch((e) => console.error(e)), 8000);
-});
+if (require.main === module) {
+  http.createServer(handler).listen(PORT, () => {
+    console.log(`Dashboard IDX: http://localhost:${PORT}  (${codes.length} emiten di universe)`);
+    ensure('1d');
+    setTimeout(() => scanFundamentals().catch((e) => console.error(e)), 8000);
+  });
+}
+module.exports = handler;

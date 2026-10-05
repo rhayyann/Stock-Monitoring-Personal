@@ -39,6 +39,13 @@ Parameter ada di `lib/analysis.js` (`CFG`). `MACD_SOURCE=line npm start` untuk m
 - **Alat gambar** (toolbar kiri chart): garis tren, garis horizontal, ray, kotak, Fibonacci retracement. Klik alat lalu klik di chart (2 klik, horizontal 1 klik). Klik garis untuk memilih, seret badan garis atau titik ujungnya untuk memindah, `Del` untuk menghapus, `Esc` untuk membatalkan. Warna bisa dipilih. Gambar tersimpan per emiten di browser (localStorage) dan menempel pada tanggal/harga, jadi tetap pada tempatnya saat pindah timeframe.
 - Label sinyal ditulis lengkap: `MACD`, `StochRSI`, atau `MACD + StochRSI` (kedua indikator sama-sama diverge, sinyal lebih kuat). Ikon ⚡ = StochRSI baru cross searah.
 
+## Deploy ke Vercel
+Repo ini siap di-import ke Vercel (`vercel.json` + `api/[...path].js`, tanpa build command). Di Vercel, aplikasi berjalan sebagai fungsi serverless sehingga ada perbedaan dari mode lokal:
+- Tidak ada proses background. Scan data dikerjakan bertahap di dalam request `/api/screener` (maks ±8 dtk per request, UI otomatis memanggil ulang sampai selesai), jadi **muat pertama setelah instance dingin terasa lebih lambat** (±10-20 dtk). Cache hanya hidup di instance yang sama (memori + folder sementara `/tmp`) dan hilang saat instance di-recycle.
+- Isi `ANTHROPIC_API_KEY` di Project Settings → Environment Variables bila ingin tombol "Analisis dengan Claude" (file `.env` tidak ikut ter-deploy).
+- Fungsi diset `maxDuration: 60` (cukup untuk scan dan panggilan Claude); batas plan bisa berbeda.
+- Bila ingin cache permanen dan refresh otomatis di background, jalankan sebagai server biasa (`npm start`) di hosting yang mendukung proses long-running (Render, Railway, Fly.io, VPS).
+
 ## Kustomisasi
 - Tambah emiten: buat `data/custom-tickers.json` berisi `["ABCD","EFGH"]`.
 - Kategori harga: `CATS` di `public/app.js`.

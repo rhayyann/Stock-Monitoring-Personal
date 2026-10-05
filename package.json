@@ -12,5 +12,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "lightweight-charts": "^5.2.1"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
