@@ -33,6 +33,14 @@ Keterbatasan: data fundamental Yahoo untuk IDX kadang tidak lengkap atau terting
 
 Parameter ada di `lib/analysis.js` (`CFG`). `MACD_SOURCE=line npm start` untuk memakai garis MACD (default histogram).
 
+## Siap entry besok
+Di screener, pilih mode **Siap entry besok** untuk melihat emiten yang bullish divergence-nya masih valid (maks 15 bar sejak pivot ke-2, belum ditembus ke bawah) beserta konfirmasi bahwa harga sudah mulai naik:
+- 5 konfirmasi: StochRSI K di atas D dan naik, histogram MACD naik 2 bar (atau MACD di atas sinyal), penutupan di atas EMA20, breakout di atas high 3 bar sebelumnya, volume > 1,2× rata-rata 20 bar.
+- Status: **Siap** (≥3 konfirmasi dan R:R memadai), **Mulai terkonfirmasi** (2 konfirmasi, atau R:R kecil), **Dini** (belum terkonfirmasi), **Sudah naik jauh** (> 4,5× ATR atau > 15% dari pivot; jangan mengejar, tunggu pullback).
+- Level untuk sesi berikutnya: pemicu breakout (high hari ini + 1 tick), zona pullback, stop loss di bawah pivot, Target 1/2 dari resistance, dan R:R; semuanya dibulatkan ke fraksi harga BEI. Kolom Valuasi memberi tahu bila emiten tergolong murah/wajar/mahal secara fundamental.
+- Bagian yang sama muncul sebagai "Rencana entry besok" di tab Analisis, dan ikut dikirim ke Claude bila Anda meminta analisis AI.
+- Saat bursa buka, bar hari ini belum final (termasuk volume); paling akurat dicek setelah penutupan. Ini penyaring kandidat, bukan jaminan harga naik.
+
 ## Chart: indikator opsional, alat gambar, tipe chart
 - **Tipe chart**: Candle / Line / Area (tombol di kanan atas chart). Garis divergence, marker, dan level S/R tetap tampil di semua tipe.
 - **Indikator** (tombol "Indikator"): overlay di harga — 3 moving average (EMA/SMA, periode bebas), Bollinger Bands, Supertrend, Parabolic SAR, Ichimoku (garis, tanpa awan berwarna), VWAP (hanya 15m/1H); panel terpisah — Volume, MACD, Stochastic RSI, RSI. Parameter bisa diubah di panel. Garis divergence MACD/StochRSI hanya digambar bila panel indikatornya aktif. Pengaturan tersimpan di browser.

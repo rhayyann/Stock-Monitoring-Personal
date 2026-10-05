@@ -247,3 +247,15 @@ details.more summary::before { content: "▸ "; } details.more[open] summary::be
 .ind-row select { width: 58px; }
 .ind-row.off { opacity: .45; }
 .ind-row small { color: var(--mut2); font-size: 10.5px; }
+
+/* ---------- mode "siap entry besok" ---------- */
+td small.sub { display: block; color: var(--mut); font-size: 10.5px; margin-top: 1px; font-weight: 400; }
+.cfs { display: flex; gap: 3px; flex-wrap: wrap; max-width: 168px; white-space: normal; }
+.cf { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--card2); color: var(--mut2); text-decoration: line-through; text-decoration-color: transparent; white-space: nowrap; }
+.cf.on { background: color-mix(in srgb, var(--up) 16%, transparent); color: var(--up); font-weight: 600; }
+.badge.st-ready { background: color-mix(in srgb, var(--up) 16%, transparent); color: var(--up); }
+.badge.st-build { background: color-mix(in srgb, var(--sup) 16%, transparent); color: var(--sup); }
+.badge.st-early { background: var(--card2); color: var(--mut); }
+.badge.st-ext { background: color-mix(in srgb, var(--res) 18%, transparent); color: var(--res); }
+.cfgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 12px 0 6px; }
+.filters { flex-wrap: wrap; justify-content: flex-end; }

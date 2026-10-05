@@ -50,7 +50,7 @@ const DEF_RANGE = { '15m': '3D', '1h': '1M', '1d': '6M', '1wk': '3Y' };
 // ---------- state ----------
 const state = {
   tf: '1d', code: 'BBCA', cat: 'all', sig: 'all', ind: 'all', hidden: '0', liq: '100000000', only: true, rtab: 'an',
-  sort: { key: 'score', dir: -1 }, range: { ...DEF_RANGE }, showDiv: true, showSR: true, type: 'candle',
+  sort: { key: 'score', dir: -1 }, range: { ...DEF_RANGE }, showDiv: true, showSR: true, type: 'candle', mode: 'all', st: 'ok',
   ov: {
     ma1: { on: false, type: 'EMA', n: 20 }, ma2: { on: false, type: 'EMA', n: 50 }, ma3: { on: false, type: 'SMA', n: 200 },
     bb: { on: false, n: 20, k: 2 }, vwap: { on: false }, st: { on: false, n: 10, k: 3 }, psar: { on: false }, ich: { on: false },
@@ -63,7 +63,7 @@ state.range = { ...DEF_RANGE, ...state.range };
 { const def = { ...state.ov }; try { const sv = JSON.parse(localStorage.getItem('idxdiv2') || '{}').ov || {}; for (const k of Object.keys(def)) def[k] = { ...def[k], ...(sv[k] || {}) }; } catch {} state.ov = def; }
 if (!['candle', 'line', 'area'].includes(state.type)) state.type = 'candle';
 Object.assign(state, { data: null, view: [], stock: null, analysis: null, anError: '', ai: {}, aiLoading: false });
-const save = () => { try { const { tf, code, cat, sig, ind, hidden, liq, only, rtab, sort, range, showDiv, showSR, type, ov } = state; localStorage.setItem('idxdiv2', JSON.stringify({ tf, code, cat, sig, ind, hidden, liq, only, rtab, sort, range, showDiv, showSR, type, ov })); } catch {} };
+const save = () => { try { const { tf, code, cat, sig, ind, hidden, liq, only, rtab, sort, range, showDiv, showSR, type, ov, mode, st } = state; localStorage.setItem('idxdiv2', JSON.stringify({ tf, code, cat, sig, ind, hidden, liq, only, rtab, sort, range, showDiv, showSR, type, ov, mode, st })); } catch {} };
 
 // ---------- chart ----------
 const chartEl = $('#chart');
@@ -391,20 +391,34 @@ function derive(r) {
   return { ...r, supPct, resPct, bull, bear, sig, score };
 }
 
+const SETUP_ST = { ready: 'Siap', build: 'Mulai terkonfirmasi', early: 'Dini', ext: 'Sudah naik jauh' };
+const ST_SETS = { ok: ['ready', 'build'], ready: ['ready'], early: ['early'], ext: ['ext'], all: ['ready', 'build', 'early', 'ext'] };
+function setupScore(r) {
+  const su = r.setup, rr = Math.max(su.rb, su.rp);
+  return { ready: 30, build: 18, early: 6, ext: 0 }[su.st] + su.n * 4 + Math.max(0, Math.min(3, rr)) * 2 + (r.fv ? { cheap: 4, fair: 1, rich: -3 }[r.fv.v] || 0 : 0);
+}
 function computeView() {
   if (!state.data) { state.view = []; return { cats: {} }; }
-  let rows = state.data.rows.filter((r) => r.avgVal >= +state.liq).map(derive);
-  if (state.sig !== 'all') rows = rows.filter((r) => (state.sig === 'bull' ? r.bull.hits.length : r.bear.hits.length));
-  if (state.only) rows = rows.filter((r) => r.sig !== 'none');
+  const besok = state.mode === 'besok';
+  let rows;
+  if (besok) {
+    const okSet = ST_SETS[state.st] || ST_SETS.ok;
+    rows = state.data.rows.filter((r) => r.setup && r.avgVal >= +state.liq && okSet.includes(r.setup.st)).map((r) => ({ ...r, sscore: setupScore(r) }));
+  } else {
+    rows = state.data.rows.filter((r) => r.avgVal >= +state.liq).map(derive);
+    if (state.sig !== 'all') rows = rows.filter((r) => (state.sig === 'bull' ? r.bull.hits.length : r.bear.hits.length));
+    if (state.only) rows = rows.filter((r) => r.sig !== 'none');
+  }
   const cats = {};
   for (const c of CATS) cats[c.id] = rows.filter((r) => r.price >= c.min && r.price < c.max).length;
   const cat = CATS.find((c) => c.id === state.cat) || CATS[0];
   const view = rows.filter((r) => r.price >= cat.min && r.price < cat.max);
   const { key, dir } = state.sort;
+  const val = (r) => (besok ? ({ bounce: r.setup.b, n: r.setup.n, rr: Math.max(r.setup.rb, r.setup.rp) }[key] ?? r[key]) : r[key]);
   view.sort((a, b) => {
-    const x = a[key] ?? -Infinity, y = b[key] ?? -Infinity;
+    const x = val(a) ?? -Infinity, y = val(b) ?? -Infinity;
     const c = typeof x === 'string' ? x.localeCompare(y) : x - y;
-    return c * dir || b.score - a.score || b.avgVal - a.avgVal;
+    return c * dir || (besok ? b.sscore - a.sscore : b.score - a.score) || b.avgVal - a.avgVal;
   });
   state.view = view;
   return { cats };
@@ -421,19 +435,49 @@ function divCell(r) {
   };
   return (r.bull.hits.length ? one(r.bull, 'bull') : '') + (r.bear.hits.length ? one(r.bear, 'bear') : '');
 }
+const THEAD = {
+  all: '<th data-k="code" class="l">Emiten</th><th data-k="price">Harga</th><th data-k="chgPct">Chg</th><th data-k="score" class="l">Divergence</th><th data-k="supPct">Support</th><th data-k="resPct">Resist</th>',
+  besok: '<th data-k="code" class="l">Emiten</th><th data-k="price">Harga</th><th data-k="n" class="l">Konfirmasi</th><th data-k="sscore" class="l">Status</th><th class="l">Beli besok</th><th>Stop loss</th><th data-k="rr">Target 1 · R:R</th><th class="l">Valuasi</th>',
+};
+const CF = [['stoch', 'StochRSI↑'], ['macd', 'MACD↑'], ['ema', '>EMA20'], ['brk', 'Breakout'], ['vol', 'Volume↑']];
+const VAL_TXT = { cheap: 'Murah', fair: 'Wajar', rich: 'Mahal' };
+function setupRow(r) {
+  const su = r.setup, rr = Math.max(su.rb, su.rp);
+  const buy = su.st === 'ready' || su.st === 'build'
+    ? `<b>Tembus ${fPrice(su.trg)}</b><small class="sub">atau pullback ${fPrice(su.z[0])}–${fPrice(su.z[1])}</small>`
+    : su.st === 'ext' ? `<span class="mut">Tunggu pullback</span><small class="sub">${fPrice(su.z[0])}–${fPrice(su.z[1])}</small>`
+      : '<span class="mut">Tunggu konfirmasi</span>';
+  return `<tr data-code="${r.code}" class="${r.code === state.code ? 'sel' : ''}">
+    <td class="l"><div class="sym"><b>${r.code}</b><span>${esc(shortName(r.name))}</span></div></td>
+    <td>${fPrice(r.price)}<small class="sub ${cls(r.chgPct)}">${fPct(r.chgPct)}</small></td>
+    <td class="l"><div class="cfs">${CF.map(([k, l]) => `<span class="cf ${su.f[k] ? 'on' : ''}">${l}</span>`).join('')}</div></td>
+    <td class="l"><span class="badge st-${su.st}">${SETUP_ST[su.st]}</span><small class="sub">${su.n}/5 · <span class="${su.b >= 0 ? 'up' : 'dn'}">${fPct(su.b, 1)}</span> dari pivot · ${su.age} ${BAR_LABEL[state.tf]} lalu</small></td>
+    <td class="l">${buy}</td>
+    <td class="dn">${fPrice(su.sl)}<small class="sub">${fPct(((su.sl - r.price) / r.price) * 100, 1)}</small></td>
+    <td>${fPrice(su.t1)}<small class="sub">R:R ${nf1.format(rr)}</small></td>
+    <td class="l">${r.fv ? `<span class="badge ${r.fv.v}">${VAL_TXT[r.fv.v]}</span><small class="sub">kualitas ${esc(r.fv.q.toLowerCase())}</small>` : '<span class="mut">—</span>'}</td></tr>`;
+}
 function renderScreener() {
   const { cats } = computeView();
+  const besok = state.mode === 'besok';
   $('#catTabs').innerHTML = CATS.map((c) => `<button data-c="${c.id}" class="${state.cat === c.id ? 'on' : ''}">${c.label}<em>${cats[c.id] ?? 0}</em></button>`).join('');
   const rows = state.view, total = state.data ? state.data.rows.length : 0;
-  $('#scCount').textContent = state.data ? `${rows.length} dari ${total} emiten` : '';
+  $('#scCount').textContent = state.data ? `${rows.length} ${besok ? 'setup' : 'ditampilkan'} dari ${total} emiten` : '';
+  $('#tbl thead tr').innerHTML = THEAD[besok ? 'besok' : 'all'];
   document.querySelectorAll('#tbl th').forEach((th) => { th.classList.toggle('sorted', th.dataset.k === state.sort.key); th.dataset.dir = state.sort.dir > 0 ? '↑' : '↓'; });
+  $('#modeSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.m === state.mode));
+  $('#stSeg').hidden = !besok; $('#sigSeg').hidden = besok;
+  $('#stSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.st === state.st));
   $('#sigSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.s === state.sig));
   const empty = $('#tblEmpty');
   if (!rows.length) {
     const sc = state.data?.scan;
     empty.hidden = false;
-    empty.textContent = !state.data ? 'Memuat data…' : sc?.running && !total ? `Mengambil data bursa… ${sc.done}/${sc.total}` : state.only ? 'Tidak ada divergence aktif dengan filter ini. Longgarkan filter atau matikan "Hanya yang ada divergence".' : 'Tidak ada data.';
+    empty.textContent = !state.data ? 'Memuat data…' : sc?.running && !total ? `Mengambil data bursa… ${sc.done}/${sc.total}`
+      : besok ? 'Belum ada setup bullish divergence dengan status ini. Coba pilih status "Semua" atau longgarkan filter likuiditas.'
+        : state.only ? 'Tidak ada divergence aktif dengan filter ini. Longgarkan filter atau matikan "Hanya yang ada divergence".' : 'Tidak ada data.';
   } else empty.hidden = true;
+  if (besok) { $('#tbody').innerHTML = rows.map(setupRow).join(''); return; }
   const lv = (p, pc) => (p ? `<span class="lvl">${fPrice(p)}<small>${pc > 0 ? '+' : ''}${nf1.format(pc)}%</small></span>` : '<span class="mut">—</span>');
   $('#tbody').innerHTML = rows.map((r) => `<tr data-code="${r.code}" class="${r.code === state.code ? 'sel' : ''}">
       <td class="l"><div class="sym"><b>${r.code}</b><span>${esc(shortName(r.name))}</span></div></td>
@@ -529,13 +573,34 @@ function aiHtml(an) {
   return `<div class="sec"><h4>Analisis ${tag}</h4>${body}</div>`;
 }
 
+const SETUP_CLS = { ready: 'good', build: 'neutral', early: '', ext: 'bad' };
+function setupHtml(an) {
+  const s = an.setup;
+  if (!s) return '<div class="sec"><h4>Rencana entry besok</h4><div class="none-txt">Belum ada bullish divergence yang valid (maks 15 bar terakhir) pada timeframe ini, jadi belum ada setup untuk besok.</div></div>';
+  const rich = an.val?.available && an.val.verdict === 'rich';
+  const row = (label, val, small, c) => `<tr class="${c || ''}"><td>${label}</td><td><b>${val}</b><small>${small || ''}</small></td></tr>`;
+  return `<div class="sec"><h4>Rencana entry besok <span class="tag">${s.count}/5 konfirmasi</span></h4>
+    <div class="verdict ${SETUP_CLS[s.state]}"><div class="v-label">${esc(s.label)}</div><div class="v-sub">${esc(s.sub)}</div>
+      <div class="v-meta"><span class="mini">${fPct(s.bounce, 1)} dari pivot ${fPrice(s.pivot)}</span><span class="mini">${nf1.format(s.bounceATR)}× ATR</span><span class="mini">${s.inds.join(' + ')} · ${s.age} ${BAR_LABEL[an.tf]} lalu</span></div></div>
+    <ul class="factors cfgrid">${s.conf.map((c) => `<li class="${c.ok ? 'good' : 'bad'}" title="${esc(c.hint)}">${esc(c.name)}</li>`).join('')}</ul>
+    <table class="plan">
+      ${row('Pemicu breakout', `tembus ${fPrice(s.trigger)}`, `R:R ${nf1.format(s.rrBreak)}`)}
+      ${row('Zona pullback', `${fPrice(s.pull[0])} – ${fPrice(s.pull[1])}`, `R:R ${nf1.format(s.rrPull)}`)}
+      ${row('Stop loss', fPrice(s.sl), `risiko ${nf1.format(s.riskPct)}%`, 'sl')}
+      ${row('Target 1', fPrice(s.t1), '', 'tp')}${row('Target 2', fPrice(s.t2), '', 'tp')}
+    </table>
+    ${rich ? '<div class="note">Valuasi di atas nilai wajar: perlakukan sebagai trading pendek dengan ukuran posisi kecil.</div>' : ''}
+    ${state.data?.marketOpen ? '<div class="note">Bursa sedang buka: bar hari ini belum final (termasuk volume), status bisa berubah saat penutupan. Paling akurat dicek setelah penutupan.</div>' : ''}
+  </div>`;
+}
+
 function renderAnalysis() {
   const el = $('#paneAn'), an = state.analysis;
   if (!an) {
     el.innerHTML = state.anError ? `<div class="none-txt">${esc(state.anError)}</div>` : '<div class="skel"></div><div class="skel" style="width:70%"></div><div class="skel"></div><div class="skel" style="width:50%"></div>';
     return;
   }
-  el.innerHTML = verdictHtml(an) + valuationHtml(an) + planHtml(an) + aiHtml(an) +
+  el.innerHTML = verdictHtml(an) + setupHtml(an) + valuationHtml(an) + planHtml(an) + aiHtml(an) +
     '<p class="disc">Alat bantu analisis, bukan rekomendasi investasi. Nilai wajar adalah estimasi dari data Yahoo Finance dan asumsi yang bisa meleset; lakukan riset sendiri dan kelola risiko.</p>';
 }
 
@@ -673,11 +738,14 @@ $('#tfSeg').addEventListener('click', (e) => {
   syncControls(); renderScreener(); renderRangeBar(); loadStock(false); loadAnalysis(false); pollScreener();
 });
 $('#catTabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.cat = b.dataset.c; save(); renderScreener(); });
+$('#modeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || b.dataset.m === state.mode) return; state.mode = b.dataset.m; state.sort = state.mode === 'besok' ? { key: 'sscore', dir: -1 } : { key: 'score', dir: -1 }; save(); renderScreener(); });
+$('#stSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.st = b.dataset.st; save(); renderScreener(); });
 $('#sigSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.sig = b.dataset.s; save(); renderScreener(); });
 $('#tbody').addEventListener('click', (e) => { const tr = e.target.closest('tr'); if (tr) selectStock(tr.dataset.code, false); });
 $('#tbl thead').addEventListener('click', (e) => {
   const th = e.target.closest('th'); if (!th) return;
   const k = th.dataset.k;
+  if (!k) return;
   if (state.sort.key === k) state.sort.dir *= -1; else state.sort = { key: k, dir: k === 'code' || k === 'supPct' ? 1 : -1 };
   save(); renderScreener();
 });
