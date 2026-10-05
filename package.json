@@ -1,0 +1,16 @@
+{
+  "name": "idx-divergence-monitor",
+  "version": "1.0.0",
+  "description": "Dashboard monitoring divergence harga vs MACD/StochRSI untuk saham IDX",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "lightweight-charts": "^5.2.1"
+  }
+}

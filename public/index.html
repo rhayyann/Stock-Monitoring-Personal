@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IDX Divergence Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23141416'/%3E%3Cpath d='M6 22l6-8 5 5 9-11' fill='none' stroke='%23ff4d5e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script>try{var t=localStorage.getItem('idxtheme');document.documentElement.dataset.theme=t||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')}catch(e){document.documentElement.dataset.theme='dark'}</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="logo"><svg viewBox="0 0 32 32" width="20" height="20"><path d="M5 22l7-9 5 5 10-12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <b>IDX Monitor</b>
+  </div>
+  <div class="seg" id="tfSeg" aria-label="Timeframe">
+    <button data-tf="15m">15m</button><button data-tf="1h">1H</button><button data-tf="1d">1D</button><button data-tf="1wk">1W</button>
+  </div>
+  <label class="search">
+    <svg viewBox="0 0 24 24" width="15" height="15"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="symInput" list="codeList" placeholder="Cari kode, mis. BBCA" autocomplete="off" spellcheck="false">
+    <datalist id="codeList"></datalist>
+  </label>
+  <div class="spacer"></div>
+  <div class="status"><span class="mkt" id="mkt">—</span><span class="scan" id="scanBar" hidden><i></i><em id="scanTxt"></em></span></div>
+  <button class="icon-btn" id="themeBtn" title="Ganti tema" aria-label="Ganti tema">
+    <svg class="i-moon" viewBox="0 0 24 24" width="17" height="17"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    <svg class="i-sun" viewBox="0 0 24 24" width="17" height="17"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+</header>
+
+<main class="grid">
+  <section class="left">
+    <div class="card chartcard">
+      <div class="chart-head">
+        <div class="ch-id">
+          <button class="icon-btn sm" id="prevBtn" title="Sebelumnya (↑)">‹</button>
+          <button class="icon-btn sm" id="nextBtn" title="Berikutnya (↓)">›</button>
+          <b id="chSym">—</b><span class="mut" id="chName"></span>
+          <b class="ch-price" id="chPrice"></b><span id="chChg"></span>
+        </div>
+        <div class="pills">
+          <div class="seg sm" id="typeSeg" title="Tipe chart"><button data-ty="candle">Candle</button><button data-ty="line">Line</button><button data-ty="area">Area</button></div>
+          <button class="pill" id="indBtn"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 17l5-6 4 4 8-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Indikator</button>
+          <button class="pill on" id="tgDiv"><i class="dot dv"></i>Divergence</button>
+          <button class="pill on" id="tgSR"><i class="dot sr"></i>Support / Resistance</button>
+        </div>
+      </div>
+      <div class="ind-panel" id="indPanel" hidden></div>
+      <div class="chart-wrap">
+        <div id="chart"></div>
+        <div id="lgs"></div>
+        <div class="dtools" id="dtools">
+          <button data-tool="cursor" class="on" title="Kursor (Esc)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+          <button data-tool="trend" title="Garis tren (2 klik)"><svg viewBox="0 0 24 24"><path d="M4 19L20 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="4" cy="19" r="2" fill="currentColor"/><circle cx="20" cy="5" r="2" fill="currentColor"/></svg></button>
+          <button data-tool="hline" title="Garis horizontal (1 klik)"><svg viewBox="0 0 24 24"><path d="M3 12h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg></button>
+          <button data-tool="ray" title="Ray (2 klik)"><svg viewBox="0 0 24 24"><path d="M4 18L21 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="4" cy="18" r="2" fill="currentColor"/><path d="M17 5l4 1-1 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+          <button data-tool="rect" title="Kotak (2 klik)"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+          <button data-tool="fib" title="Fibonacci retracement (2 klik)"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 10h18M3 15h18M3 20h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+          <span class="sep"></span>
+          <label class="colorpick" title="Warna garis"><input type="color" id="dColor" value="#f5a623"></label>
+          <button id="dDel" title="Hapus garis terpilih (Del)" disabled><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button id="dClear" title="Hapus semua garis"><svg viewBox="0 0 24 24"><path d="M4 4l16 16M20 4L4 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </div>
+        <div class="loading" id="chLoading" hidden>Memuat…</div>
+        <div class="empty" id="chEmpty" hidden></div>
+      </div>
+      <div class="range-bar" id="rangeBar"></div>
+    </div>
+
+    <div class="card screener">
+      <div class="sc-head">
+        <h3>Screener <small id="scCount"></small></h3>
+        <div class="filters">
+          <div class="seg sm" id="sigSeg"><button data-s="all">Semua</button><button data-s="bull">Bullish</button><button data-s="bear">Bearish</button></div>
+          <details class="adv" id="adv">
+            <summary>Filter</summary>
+            <div class="adv-body">
+              <label>Indikator<select id="fInd"><option value="all">MACD atau StochRSI</option><option value="MACD">MACD saja</option><option value="StochRSI">StochRSI saja</option><option value="both">Keduanya (kuat)</option></select></label>
+              <label>Tipe<select id="fHidden"><option value="0">Regular</option><option value="1">Regular + Hidden</option></select></label>
+              <label>Likuiditas<select id="fLiq"><option value="0">Semua</option><option value="100000000">≥ Rp100 jt/hari</option><option value="500000000">≥ Rp500 jt/hari</option><option value="1000000000">≥ Rp1 M/hari</option><option value="5000000000">≥ Rp5 M/hari</option></select></label>
+              <label class="chk"><input type="checkbox" id="fOnly" checked>Hanya yang ada divergence</label>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="tabs" id="catTabs"></div>
+      <div class="table-wrap">
+        <table id="tbl">
+          <thead><tr>
+            <th data-k="code" class="l">Emiten</th><th data-k="price">Harga</th><th data-k="chgPct">Chg</th>
+            <th data-k="score" class="l">Divergence</th><th data-k="supPct">Support</th><th data-k="resPct">Resist</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div class="tbl-empty" id="tblEmpty" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="right card">
+    <div class="rtabs" id="rTabs"><button data-t="an" class="on">Analisis</button><button data-t="sig">Sinyal</button></div>
+    <div class="rbody">
+      <div id="paneAn"></div>
+      <div id="paneSig" hidden></div>
+    </div>
+  </aside>
+</main>
+
+<script src="vendor/lightweight-charts.standalone.production.js"></script>
+<script src="indicators.js"></script>
+<script src="draw.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
