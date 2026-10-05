@@ -42,7 +42,8 @@ Di screener, pilih mode **Siap entry besok** untuk melihat emiten yang bullish d
 - Saat bursa buka, bar hari ini belum final (termasuk volume); paling akurat dicek setelah penutupan. Ini penyaring kandidat, bukan jaminan harga naik.
 
 ## Chart: indikator opsional, alat gambar, tipe chart
-- **Tipe chart**: Candle / Line / Area (tombol di kanan atas chart). Garis divergence, marker, dan level S/R tetap tampil di semua tipe.
+- **Tipe chart**: Candle / Line / Area (tombol di kanan atas chart). Garis divergence, marker, dan level S/R tetap tampil di semua tipe. Mode Line memakai garis biru dengan titik di harga terakhir, garis harga putus-putus, dan grid titik-titik.
+- **Support / resistance** digambar sebagai segmen tebal yang mulai dari titik pivot pertama level itu sampai bar terakhir: resistance merah, support biru (tema gelap dan terang), dengan label S1-S3 / R1-R3 di sumbu harga.
 - **Indikator** (tombol "Indikator"): overlay di harga — 3 moving average (EMA/SMA, periode bebas), Bollinger Bands, Supertrend, Parabolic SAR, Ichimoku (garis, tanpa awan berwarna), VWAP (hanya 15m/1H); panel terpisah — Volume, MACD, Stochastic RSI, RSI. Parameter bisa diubah di panel. Garis divergence MACD/StochRSI hanya digambar bila panel indikatornya aktif. Pengaturan tersimpan di browser.
 - **Alat gambar** (toolbar kiri chart): garis tren, garis horizontal, ray, kotak, Fibonacci retracement. Klik alat lalu klik di chart (2 klik, horizontal 1 klik). Klik garis untuk memilih, seret badan garis atau titik ujungnya untuk memindah, `Del` untuk menghapus, `Esc` untuk membatalkan. Warna bisa dipilih. Gambar tersimpan per emiten di browser (localStorage) dan menempel pada tanggal/harga, jadi tetap pada tempatnya saat pindah timeframe.
 - Label sinyal ditulis lengkap: `MACD`, `StochRSI`, atau `MACD + StochRSI` (kedua indikator sama-sama diverge, sinyal lebih kuat). Ikon ⚡ = StochRSI baru cross searah.

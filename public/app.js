@@ -6,7 +6,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const COL = {};
 function readPalette() {
   const cs = getComputedStyle(document.documentElement);
-  for (const [k, v] of Object.entries({ up: '--up', dn: '--dn', sup: '--sup', res: '--res', bg: '--chart-bg', grid: '--grid', cross: '--cross', mut: '--mut', line: '--line', tx: '--tx' })) COL[k] = cs.getPropertyValue(v).trim();
+  for (const [k, v] of Object.entries({ up: '--up', dn: '--dn', sup: '--sup', res: '--res', bg: '--chart-bg', grid: '--grid', cross: '--cross', mut: '--mut', line: '--line', tx: '--tx', ln: '--linec' })) COL[k] = cs.getPropertyValue(v).trim();
 }
 readPalette();
 
@@ -93,8 +93,10 @@ function ensureMain() {
   if (S.main) { try { markersApi.detach(); } catch {} chart.removeSeries(S.main); }
   S.mainType = state.type;
   const pl = { priceLineColor: COL.cross, priceLineStyle: LW.LineStyle.Dotted };
-  if (state.type === 'line') S.main = chart.addSeries(LW.LineSeries, { color: COL.tx, lineWidth: 2, ...pl }, 0);
-  else if (state.type === 'area') S.main = chart.addSeries(LW.AreaSeries, { lineColor: COL.sup, topColor: rgba(COL.sup, 0.32), bottomColor: rgba(COL.sup, 0), lineWidth: 2, ...pl }, 0);
+  const dotted = state.type !== 'candle';
+  chart.applyOptions({ grid: { vertLines: { style: dotted ? LW.LineStyle.Dotted : LW.LineStyle.Solid }, horzLines: { style: dotted ? LW.LineStyle.Dotted : LW.LineStyle.Solid } } });
+  if (state.type === 'line') S.main = chart.addSeries(LW.LineSeries, { color: COL.ln, lineWidth: 2, priceLineColor: COL.ln, priceLineStyle: LW.LineStyle.Dotted, crosshairMarkerVisible: true }, 0);
+  else if (state.type === 'area') S.main = chart.addSeries(LW.AreaSeries, { lineColor: COL.ln, topColor: rgba(COL.ln, 0.32), bottomColor: rgba(COL.ln, 0), lineWidth: 2, priceLineColor: COL.ln, priceLineStyle: LW.LineStyle.Dotted }, 0);
   else S.main = chart.addSeries(LW.CandlestickSeries, { ...candleColors(), ...pl }, 0);
   markersApi = LW.createSeriesMarkers(S.main, []);
 }
@@ -269,11 +271,18 @@ function renderChart(d, keepRange) {
     }
     mk.sort((a, b) => a.time - b.time);
   }
+  if (state.type === 'line') mk.push({ time: c.t[c.t.length - 1], position: 'inBar', shape: 'circle', color: COL.ln, size: 1 });
+  mk.sort((a, b) => a.time - b.time);
   markersApi.setMarkers(mk);
 
   if (state.showSR) {
-    d.sr.supports.forEach((l, i) => priceLines.push(S.main.createPriceLine({ price: l.price, color: rgba(COL.sup, 0.85), lineWidth: 1, lineStyle: LW.LineStyle.Dashed, axisLabelVisible: true, title: `S${i + 1}` })));
-    d.sr.resistances.forEach((l, i) => priceLines.push(S.main.createPriceLine({ price: l.price, color: rgba(COL.res, 0.85), lineWidth: 1, lineStyle: LW.LineStyle.Dashed, axisLabelVisible: true, title: `R${i + 1}` })));
+    const level = (l, color, title) => {
+      const t0 = Math.max(l.t0 ?? c.t[0], c.t[0]), t1 = c.t[c.t.length - 1];
+      if (t0 < t1) add(LW.LineSeries, { color, lineWidth: 3, lineStyle: LW.LineStyle.Solid, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }, 0).setData([{ time: t0, value: l.price }, { time: t1, value: l.price }]);
+      priceLines.push(S.main.createPriceLine({ price: l.price, color, lineVisible: false, axisLabelVisible: true, title }));
+    };
+    d.sr.supports.forEach((l, i) => level(l, COL.sup, `S${i + 1}`));
+    d.sr.resistances.forEach((l, i) => level(l, COL.res, `R${i + 1}`));
     const p = state.analysis?.plan;
     if (p && state.analysis.code === d.code && state.analysis.tf === d.tf) { // level rencana entry
       priceLines.push(S.main.createPriceLine({ price: p.stop, color: rgba(COL.dn, 0.9), lineWidth: 1, lineStyle: LW.LineStyle.Dotted, axisLabelVisible: true, title: 'SL' }));
