@@ -310,7 +310,8 @@ function sendJson(req, res, status, obj) {
 const handler = async (req, res) => {
   try {
     const u = new URL(req.url, 'http://x');
-    const p = decodeURIComponent(u.pathname);
+    let p = decodeURIComponent(u.pathname);
+    if (SERVERLESS && u.searchParams.has('__p')) p = '/api/' + u.searchParams.get('__p'); // rewrite Vercel membawa path asli di query
     if (p === '/api/screener') {
       const tf = TF[u.searchParams.get('tf')] ? u.searchParams.get('tf') : '1d';
       if (SERVERLESS) await advance(tf); else ensure(tf);
