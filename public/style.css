@@ -268,3 +268,10 @@ td small.sub { display: block; color: var(--mut); font-size: 10.5px; margin-top:
 .splitter:hover i, .splitter:focus-visible i, .splitter.drag i { background: var(--acc); width: 64px; }
 body.resizing { cursor: row-resize !important; user-select: none; }
 body.resizing * { cursor: row-resize !important; }
+
+.badge.st-form { background: color-mix(in srgb, var(--up) 18%, transparent); color: var(--up); }
+.badge.st-near { background: color-mix(in srgb, var(--sup) 16%, transparent); color: var(--sup); }
+.fmnote { font-size: 11.5px; color: var(--tx); opacity: .85; white-space: normal; display: block; max-width: 190px; line-height: 1.35; }
+.dvbox { margin: 12px 0 8px; padding: 10px 12px; border-radius: 10px; background: var(--card2); font-size: 12px; line-height: 1.55; }
+.dvbox b { font-weight: 600; }
+.hint-sm { font-size: 10.5px; color: var(--mut); margin: 4px 0 0; }

@@ -216,12 +216,12 @@ async function advance(tf) {
 // ---------- API ----------
 function activeDivs(a) {
   if (!a) return [];
-  return a.divs.filter((d) => d.active).map((d) => ({ k: d.kind, m: d.mode, i: d.ind, age: d.age }));
+  return a.divs.filter((d) => d.active).map((d) => ({ k: d.kind, m: d.mode, i: d.ind, age: d.age, f: d.forming ? 1 : 0 }));
 }
 
 function compactSetup(su) {
   if (!su) return null;
-  return { st: su.state, n: su.count, f: su.flags, b: su.bounce, ba: su.bounceATR, age: su.age, trg: su.trigger, z: su.pull, sl: su.sl, t1: su.t1, rb: su.rrBreak, rp: su.rrPull, rk: su.riskPct, pv: su.pivot, ind: su.inds };
+  return { st: su.state, n: su.count, f: su.flags, b: su.bounce, ba: su.bounceATR, age: su.age, trg: su.trigger, z: su.pull, sl: su.sl, t1: su.t1, rb: su.rrBreak, rp: su.rrPull, rk: su.riskPct, pv: su.pivot, ind: su.inds, hold: su.hold || null, da: su.distATR ?? null, fm: su.fm ? { p1: su.fm.p1, p2: su.fm.p2, c: !!su.fm.confirmed } : null };
 }
 function quickVal(code, price) {
   const f = fund[code];
@@ -300,7 +300,7 @@ function aiPayload(an) {
       konsensus_analis: v.target, catatan: v.notes, asumsi: v.assumptions, peer_sektor: v.sector.n,
     } : { tersedia: false, alasan: v.reason },
     teknikal: { tren: p.trend, ema20: round(p.ema20), ema50: round(p.ema50), atr: round(p.atr), divergence_aktif: an._tech.active, trigger_stochrsi: an._tech.trig, support: an._tech.sr.supports.map((x) => ({ harga: round(x.price), sentuhan: x.touches })), resistance: an._tech.sr.resistances.map((x) => ({ harga: round(x.price), sentuhan: x.touches })), performa_persen: Object.fromEntries(Object.entries(an._tech.perf).map(([k, x]) => [k, x == null ? null : +x.toFixed(1)])) },
-    besok: an.setup ? { status: an.setup.label, konfirmasi_terpenuhi: an.setup.passed, jumlah_konfirmasi_dari_5: an.setup.count, naik_dari_pivot_persen: +an.setup.bounce.toFixed(1), naik_dalam_kelipatan_ATR: +an.setup.bounceATR.toFixed(1), umur_divergence_bar: an.setup.age, indikator_divergence: an.setup.inds, pivot_low: an.setup.pivot, pemicu_breakout: an.setup.trigger, zona_pullback: an.setup.pull, stop_loss: an.setup.sl, target1: an.setup.t1, target2: an.setup.t2, rr_breakout: +an.setup.rrBreak.toFixed(1), rr_pullback: +an.setup.rrPull.toFixed(1), catatan: 'bar terakhir bisa belum final bila bursa sedang buka' } : null,
+    besok: an.setup ? { status: an.setup.label, konfirmasi_terpenuhi: an.setup.passed, jumlah_konfirmasi_dari_5: an.setup.count, naik_dari_pivot_persen: +an.setup.bounce.toFixed(1), naik_dalam_kelipatan_ATR: +an.setup.bounceATR.toFixed(1), umur_divergence_bar: an.setup.age, indikator_divergence: an.setup.inds, pivot_low: an.setup.pivot, pemicu_breakout: an.setup.trigger, zona_pullback: an.setup.pull, stop_loss: an.setup.sl, target1: an.setup.t1, target2: an.setup.t2, rr_breakout: +an.setup.rrBreak.toFixed(1), rr_pullback: +an.setup.rrPull.toFixed(1), status_kode: an.setup.state, level_indikator_yang_harus_bertahan: an.setup.hold || null, low_sebelumnya: an.setup.fm?.p1 ?? null, low_kedua_atau_pivot: an.setup.pivot, catatan: 'bar terakhir bisa belum final bila bursa sedang buka; status form = divergence baru terbentuk dan harga belum naik, near = harga mendekati low sebelumnya (antisipasi, belum terjadi)' } : null,
     plan: { action: p.action, alasan_singkat: p.sub, zona_beli: p.zone, stop_loss: p.stop, target1: p.t1, target2: p.t2, rr_t1: round(p.rr1), rr_t2: round(p.rr2), risiko_persen: round(p.riskPct), faktor: p.reasons.map((r) => r.s) },
   };
 }

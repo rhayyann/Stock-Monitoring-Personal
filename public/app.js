@@ -50,7 +50,7 @@ const DEF_RANGE = { '15m': '3D', '1h': '1M', '1d': '6M', '1wk': '3Y' };
 // ---------- state ----------
 const state = {
   tf: '1d', code: 'BBCA', cat: 'all', sig: 'all', ind: 'all', hidden: '0', liq: '100000000', only: true, rtab: 'an',
-  sort: { key: 'score', dir: -1 }, range: { ...DEF_RANGE }, showDiv: true, showSR: true, type: 'candle', mode: 'all', st: 'ok',
+  sort: { key: 'score', dir: -1 }, range: { ...DEF_RANGE }, showDiv: true, showSR: true, type: 'candle', mode: 'all', st: 'soon',
   ov: {
     ma1: { on: false, type: 'EMA', n: 20 }, ma2: { on: false, type: 'EMA', n: 50 }, ma3: { on: false, type: 'SMA', n: 200 },
     bb: { on: false, n: 20, k: 2 }, vwap: { on: false }, st: { on: false, n: 10, k: 3 }, psar: { on: false }, ich: { on: false },
@@ -62,8 +62,9 @@ if (!RANGES[state.tf]) state.tf = '1d';
 state.range = { ...DEF_RANGE, ...state.range };
 { const def = { ...state.ov }; try { const sv = JSON.parse(localStorage.getItem('idxdiv2') || '{}').ov || {}; for (const k of Object.keys(def)) def[k] = { ...def[k], ...(sv[k] || {}) }; } catch {} state.ov = def; }
 if (!['candle', 'line', 'area'].includes(state.type)) state.type = 'candle';
+try { if (JSON.parse(localStorage.getItem('idxdiv2') || '{}').stv !== 2) state.st = 'soon'; } catch {}
 Object.assign(state, { data: null, view: [], stock: null, analysis: null, anError: '', ai: {}, aiLoading: false });
-const save = () => { try { const { tf, code, cat, sig, ind, hidden, liq, only, rtab, sort, range, showDiv, showSR, type, ov, mode, st } = state; localStorage.setItem('idxdiv2', JSON.stringify({ tf, code, cat, sig, ind, hidden, liq, only, rtab, sort, range, showDiv, showSR, type, ov, mode, st })); } catch {} };
+const save = () => { try { const { tf, code, cat, sig, ind, hidden, liq, only, rtab, sort, range, showDiv, showSR, type, ov, mode, st } = state; localStorage.setItem('idxdiv2', JSON.stringify({ tf, code, cat, sig, ind, hidden, liq, only, rtab, sort, range, showDiv, showSR, type, ov, mode, st, stv: 2 })); } catch {} };
 
 // ---------- chart ----------
 const chartEl = $('#chart');
@@ -254,7 +255,7 @@ function renderChart(d, keepRange) {
     const divs = visDivs(d).filter((v) => oscIdx[v.ind] != null);
     for (const v of divs) {
       const base = v.kind === 'bull' ? COL.up : COL.dn;
-      const opt = { color: v.active ? base : rgba(base, 0.4), lineWidth: v.active ? 2 : 1, lineStyle: v.mode === 'hidden' ? LW.LineStyle.Dashed : LW.LineStyle.Solid, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+      const opt = { color: v.active ? base : rgba(base, 0.4), lineWidth: v.active ? 2 : 1, lineStyle: v.forming ? LW.LineStyle.Dotted : v.mode === 'hidden' ? LW.LineStyle.Dashed : LW.LineStyle.Solid, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
       add(LW.LineSeries, opt, 0).setData([{ time: v.t1, value: v.p1 }, { time: v.t2, value: v.p2 }]);
       add(LW.LineSeries, opt, oscIdx[v.ind]).setData([{ time: v.u1, value: v.v1 }, { time: v.u2, value: v.v2 }]);
     }
@@ -400,11 +401,11 @@ function derive(r) {
   return { ...r, supPct, resPct, bull, bear, sig, score };
 }
 
-const SETUP_ST = { ready: 'Siap', build: 'Mulai terkonfirmasi', early: 'Dini', ext: 'Sudah naik jauh' };
-const ST_SETS = { ok: ['ready', 'build'], ready: ['ready'], early: ['early'], ext: ['ext'], all: ['ready', 'build', 'early', 'ext'] };
+const SETUP_ST = { form: 'Sedang terbentuk', near: 'Mendekati', ready: 'Siap', build: 'Mulai terkonfirmasi', early: 'Dini', ext: 'Sudah naik jauh' };
+const ST_SETS = { soon: ['form', 'near'], ok: ['ready', 'build'], early: ['early'], ext: ['ext'], all: ['form', 'near', 'ready', 'build', 'early', 'ext'] };
 function setupScore(r) {
   const su = r.setup, rr = Math.max(su.rb, su.rp);
-  return { ready: 30, build: 18, early: 6, ext: 0 }[su.st] + su.n * 4 + Math.max(0, Math.min(3, rr)) * 2 + (r.fv ? { cheap: 4, fair: 1, rich: -3 }[r.fv.v] || 0 : 0);
+  return { form: 45, near: 30, ready: 28, build: 16, early: 5, ext: 0 }[su.st] + su.n * (su.st === 'form' || su.st === 'near' ? 0 : 3) + (su.ind.length > 1 ? 4 : 0) + Math.max(0, Math.min(3, rr)) * 2 + (r.fv ? { cheap: 4, fair: 1, rich: -3 }[r.fv.v] || 0 : 0);
 }
 function computeView() {
   if (!state.data) { state.view = []; return { cats: {} }; }
@@ -439,8 +440,8 @@ function divCell(r) {
     const letters = [...sd.hits].sort().join(' + ');
     const ds = sd.hits.map((h) => sd.get(h));
     const age = Math.min(...ds.map((d) => d.age));
-    const type = ds.some((d) => d.m === 'regular') ? 'Regular' : 'Hidden';
-    return `<div class="dvcell"><span class="chip ${kind}" title="${sd.hits.join(' + ')}">${kind === 'bull' ? '▲ Bullish' : '▼ Bearish'} ${letters}${r.trig === kind ? ' ⚡' : ''}</span><small>${type} · ${age} ${BAR_LABEL[state.tf]} lalu</small></div>`;
+    const type = ds.some((d) => d.f) ? 'Sedang terbentuk' : ds.some((d) => d.m === 'regular') ? 'Regular' : 'Hidden';
+    return `<div class="dvcell"><span class="chip ${kind}" title="${sd.hits.join(' + ')}">${kind === 'bull' ? '▲ Bullish' : '▼ Bearish'} ${letters}${r.trig === kind ? ' ⚡' : ''}</span><small>${ds.some((d) => d.f) ? type + ' · belum terkonfirmasi' : type + ' · ' + age + ' ' + BAR_LABEL[state.tf] + ' lalu'}</small></div>`;
   };
   return (r.bull.hits.length ? one(r.bull, 'bull') : '') + (r.bear.hits.length ? one(r.bear, 'bear') : '');
 }
@@ -450,17 +451,31 @@ const THEAD = {
 };
 const CF = [['stoch', 'StochRSI↑'], ['macd', 'MACD↑'], ['ema', '>EMA20'], ['brk', 'Breakout'], ['vol', 'Volume↑']];
 const VAL_TXT = { cheap: 'Murah', fair: 'Wajar', rich: 'Mahal' };
+const fmtInd = (v) => (Math.abs(v) >= 10 ? nf0.format(v) : nf2.format(v));
 function setupRow(r) {
-  const su = r.setup, rr = Math.max(su.rb, su.rp);
-  const buy = su.st === 'ready' || su.st === 'build'
-    ? `<b>Tembus ${fPrice(su.trg)}</b><small class="sub">atau pullback ${fPrice(su.z[0])}–${fPrice(su.z[1])}</small>`
-    : su.st === 'ext' ? `<span class="mut">Tunggu pullback</span><small class="sub">${fPrice(su.z[0])}–${fPrice(su.z[1])}</small>`
-      : '<span class="mut">Tunggu konfirmasi</span>';
+  const su = r.setup, rr = Math.max(su.rb, su.rp), early = su.st === 'form' || su.st === 'near';
+  let conf, status, buy;
+  if (su.st === 'form') {
+    conf = `<span class="fmnote">Low kedua ${fPrice(su.fm.p2)} &lt; low lama ${fPrice(su.fm.p1)}, ${esc(su.ind.join(' + '))} lebih tinggi</span>`;
+    status = `<span class="badge st-form">${SETUP_ST.form}</span><small class="sub">${su.fm.c ? 'pivot terkonfirmasi' : 'belum terkonfirmasi'} · harga belum naik (${fPct(su.b, 1)})</small>`;
+    buy = `<b>Zona ${fPrice(su.z[0])}–${fPrice(su.z[1])}</b><small class="sub">cicil sebelum naik</small>`;
+  } else if (su.st === 'near') {
+    conf = `<span class="fmnote">${nf1.format(su.da)}× ATR di atas low ${fPrice(su.pv)}; ${esc((su.hold || []).map((x) => x.ind + ' > ' + fmtInd(x.level)).join(' & '))}</span>`;
+    status = `<span class="badge st-near">${SETUP_ST.near}</span><small class="sub">antisipasi · divergence belum terjadi</small>`;
+    buy = `<b>Antisipasi ${fPrice(su.z[0])}–${fPrice(su.z[1])}</b><small class="sub">uji low ${fPrice(su.pv)}</small>`;
+  } else {
+    conf = `<div class="cfs">${CF.map(([k, l]) => `<span class="cf ${su.f[k] ? 'on' : ''}">${l}</span>`).join('')}</div>`;
+    status = `<span class="badge st-${su.st}">${SETUP_ST[su.st]}</span><small class="sub">${su.n}/5 · <span class="${su.b >= 0 ? 'up' : 'dn'}">${fPct(su.b, 1)}</span> dari pivot · ${su.age} ${BAR_LABEL[state.tf]} lalu</small>`;
+    buy = su.st === 'ready' || su.st === 'build'
+      ? `<b>Tembus ${fPrice(su.trg)}</b><small class="sub">atau pullback ${fPrice(su.z[0])}–${fPrice(su.z[1])}</small>`
+      : su.st === 'ext' ? `<span class="mut">Tunggu pullback</span><small class="sub">${fPrice(su.z[0])}–${fPrice(su.z[1])}</small>`
+        : '<span class="mut">Tunggu konfirmasi</span>';
+  }
   return `<tr data-code="${r.code}" class="${r.code === state.code ? 'sel' : ''}">
     <td class="l"><div class="sym"><b>${r.code}</b><span>${esc(shortName(r.name))}</span></div></td>
     <td>${fPrice(r.price)}<small class="sub ${cls(r.chgPct)}">${fPct(r.chgPct)}</small></td>
-    <td class="l"><div class="cfs">${CF.map(([k, l]) => `<span class="cf ${su.f[k] ? 'on' : ''}">${l}</span>`).join('')}</div></td>
-    <td class="l"><span class="badge st-${su.st}">${SETUP_ST[su.st]}</span><small class="sub">${su.n}/5 · <span class="${su.b >= 0 ? 'up' : 'dn'}">${fPct(su.b, 1)}</span> dari pivot · ${su.age} ${BAR_LABEL[state.tf]} lalu</small></td>
+    <td class="l">${conf}</td>
+    <td class="l">${status}</td>
     <td class="l">${buy}</td>
     <td class="dn">${fPrice(su.sl)}<small class="sub">${fPct(((su.sl - r.price) / r.price) * 100, 1)}</small></td>
     <td>${fPrice(su.t1)}<small class="sub">R:R ${nf1.format(rr)}</small></td>
@@ -582,24 +597,35 @@ function aiHtml(an) {
   return `<div class="sec"><h4>Analisis ${tag}</h4>${body}</div>`;
 }
 
-const SETUP_CLS = { ready: 'good', build: 'neutral', early: '', ext: 'bad' };
+const SETUP_CLS = { form: 'good', near: 'neutral', ready: 'good', build: 'neutral', early: '', ext: 'bad' };
 function setupHtml(an) {
   const s = an.setup;
-  if (!s) return '<div class="sec"><h4>Rencana entry besok</h4><div class="none-txt">Belum ada bullish divergence yang valid (maks 15 bar terakhir) pada timeframe ini, jadi belum ada setup untuk besok.</div></div>';
+  if (!s) return '<div class="sec"><h4>Rencana entry besok</h4><div class="none-txt">Belum ada bullish divergence yang sedang terbentuk, mendekati, atau valid (maks 15 bar terakhir) pada timeframe ini, jadi belum ada setup untuk besok.</div></div>';
   const rich = an.val?.available && an.val.verdict === 'rich';
+  const early = s.state === 'form' || s.state === 'near';
   const row = (label, val, small, c) => `<tr class="${c || ''}"><td>${label}</td><td><b>${val}</b><small>${small || ''}</small></td></tr>`;
-  return `<div class="sec"><h4>Rencana entry besok <span class="tag">${s.count}/5 konfirmasi</span></h4>
+  let box = '', table;
+  if (s.state === 'form') {
+    box = `<div class="dvbox"><b>Divergence yang sedang terbentuk</b><br>Low sebelumnya ${fPrice(s.fm.p1)} → low kedua <b>${fPrice(s.fm.p2)}</b> (lebih rendah), sementara <b>${esc(s.inds.join(' + '))}</b> membuat low yang lebih tinggi. Harga baru ${fPct(s.bounce, 1)} (${nf1.format(s.bounceATR)}× ATR) dari low kedua, jadi belum naik. ${s.fm.confirmed ? 'Pivot low sudah terkonfirmasi.' : 'Low kedua belum terkonfirmasi: bila harga menembus lebih rendah, sinyal batal.'}</div>`;
+  } else if (s.state === 'near') {
+    box = `<div class="dvbox"><b>Divergence belum terjadi, hanya mendekati</b><br>Harga ${nf1.format(s.distATR)}× ATR di atas low sebelumnya <b>${fPrice(s.pivot)}</b>. Divergence terbentuk bila harga menguji/menembus level itu sementara ${(s.hold || []).map((x) => `<b>${esc(x.ind)}</b> bertahan di atas ${fmtInd(x.level)} (sekarang ${fmtInd(x.now)})`).join(' dan ')}. Bila indikator ikut turun di bawah level itu, tidak ada divergence.</div>`;
+  }
+  table = early
+    ? `${row(s.state === 'form' ? 'Zona beli (cicil)' : 'Zona antisipasi', `${fPrice(s.pull[0])} – ${fPrice(s.pull[1])}`, `R:R ${nf1.format(s.rrPull)}`)}${row('Stop loss', fPrice(s.sl), `risiko ${nf1.format(s.riskPct)}%`, 'sl')}`
+    : `${row('Pemicu breakout', `tembus ${fPrice(s.trigger)}`, `R:R ${nf1.format(s.rrBreak)}`)}${row('Zona pullback', `${fPrice(s.pull[0])} – ${fPrice(s.pull[1])}`, `R:R ${nf1.format(s.rrPull)}`)}${row('Stop loss', fPrice(s.sl), `risiko ${nf1.format(s.riskPct)}%`, 'sl')}`;
+  return `<div class="sec"><h4>Rencana entry besok <span class="tag">${early ? (s.state === 'form' ? 'belum naik' : 'antisipasi') : s.count + '/5 konfirmasi'}</span></h4>
     <div class="verdict ${SETUP_CLS[s.state]}"><div class="v-label">${esc(s.label)}</div><div class="v-sub">${esc(s.sub)}</div>
-      <div class="v-meta"><span class="mini">${fPct(s.bounce, 1)} dari pivot ${fPrice(s.pivot)}</span><span class="mini">${nf1.format(s.bounceATR)}× ATR</span><span class="mini">${s.inds.join(' + ')} · ${s.age} ${BAR_LABEL[an.tf]} lalu</span></div></div>
-    <ul class="factors cfgrid">${s.conf.map((c) => `<li class="${c.ok ? 'good' : 'bad'}" title="${esc(c.hint)}">${esc(c.name)}</li>`).join('')}</ul>
+      <div class="v-meta"><span class="mini">${early && s.state === 'form' ? 'low ' + fPrice(s.pivot) : fPct(s.bounce, 1) + ' dari pivot ' + fPrice(s.pivot)}</span><span class="mini">${nf1.format(s.bounceATR)}× ATR</span><span class="mini">${s.inds.join(' + ')}${s.state === 'form' ? '' : ' · ' + s.age + ' ' + BAR_LABEL[an.tf] + ' lalu'}</span></div></div>
+    ${box}
     <table class="plan">
-      ${row('Pemicu breakout', `tembus ${fPrice(s.trigger)}`, `R:R ${nf1.format(s.rrBreak)}`)}
-      ${row('Zona pullback', `${fPrice(s.pull[0])} – ${fPrice(s.pull[1])}`, `R:R ${nf1.format(s.rrPull)}`)}
-      ${row('Stop loss', fPrice(s.sl), `risiko ${nf1.format(s.riskPct)}%`, 'sl')}
+      ${table}
       ${row('Target 1', fPrice(s.t1), '', 'tp')}${row('Target 2', fPrice(s.t2), '', 'tp')}
     </table>
+    <p class="hint-sm">${early ? 'Konfirmasi untuk menambah posisi:' : 'Konfirmasi saat ini:'}</p>
+    <ul class="factors cfgrid">${s.conf.map((c) => `<li class="${c.ok ? 'good' : 'bad'}" title="${esc(c.hint)}">${esc(c.name)}</li>`).join('')}</ul>
     ${rich ? '<div class="note">Valuasi di atas nilai wajar: perlakukan sebagai trading pendek dengan ukuran posisi kecil.</div>' : ''}
-    ${state.data?.marketOpen ? '<div class="note">Bursa sedang buka: bar hari ini belum final (termasuk volume), status bisa berubah saat penutupan. Paling akurat dicek setelah penutupan.</div>' : ''}
+    ${early ? '<div class="note">Entry dini dilakukan SEBELUM ada konfirmasi kenaikan, jadi risiko salahnya lebih besar. Pakai ukuran posisi kecil dan disiplin di stop loss.</div>' : ''}
+    ${state.data?.marketOpen ? '<div class="note">Bursa sedang buka: bar hari ini belum final (termasuk low dan volume), status bisa berubah saat penutupan. Paling akurat dicek setelah penutupan.</div>' : ''}
   </div>`;
 }
 
@@ -630,7 +656,7 @@ function renderSignals() {
   const list = visDivs(d).slice(0, 8);
   const dl = list.length ? list.map((v) => `<div class="dv-row ${v.active ? 'act' : 'old'}"><span class="chip ${v.kind}">${v.kind === 'bull' ? '▲ Bull' : '▼ Bear'}</span>
       <div><b>${v.ind}</b> <span class="mut">${v.mode === 'regular' ? 'Regular' : 'Hidden'}</span><div class="meta">${fDate(v.t1, d.tf)} → ${fDate(v.t2, d.tf)} · ${fPrice(v.p1)} → ${fPrice(v.p2)}</div></div>
-      <div class="age">${v.active ? '● aktif · ' : ''}${v.age} ${BAR_LABEL[d.tf]} lalu</div></div>`).join('') : '<div class="none-txt">Tidak ada divergence terdeteksi di histori yang dipindai.</div>';
+      <div class="age">${v.forming ? '● sedang terbentuk' : (v.active ? '● aktif · ' : '') + v.age + ' ' + BAR_LABEL[d.tf] + ' lalu'}</div></div>`).join('') : '<div class="none-txt">Tidak ada divergence terdeteksi di histori yang dipindai.</div>';
 
   const price = d.last.price;
   const sr = (l, t, i) => `<div class="sr-row ${t}"><span class="tag">${t === 'res' ? 'R' : 'S'}${i + 1}</span><span class="px">${fPrice(l.price)}</span><span class="pc">${l.touches}× sentuh · ${fPct(((l.price - price) / price) * 100, 1)}</span></div>`;
