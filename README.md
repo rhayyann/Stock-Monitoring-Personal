@@ -33,6 +33,9 @@ Keterbatasan: data fundamental Yahoo untuk IDX kadang tidak lengkap atau terting
 
 Parameter ada di `lib/analysis.js` (`CFG`). `MACD_SOURCE=line npm start` untuk memakai garis MACD (default histogram).
 
+## Mengatur ukuran panel
+Pemisah tipis di antara chart dan screener bisa diseret ke atas/bawah untuk memperbesar atau memperkecil screener (chart menyesuaikan). Klik dua kali untuk reset, atau fokuskan pemisah lalu pakai panah atas/bawah. Ukuran tersimpan di browser (di layar kecil/mobile pemisah disembunyikan).
+
 ## Siap entry besok
 Di screener, pilih mode **Siap entry besok** untuk melihat emiten yang bullish divergence-nya masih valid (maks 15 bar sejak pivot ke-2, belum ditembus ke bawah) beserta konfirmasi bahwa harga sudah mulai naik:
 - 5 konfirmasi: StochRSI K di atas D dan naik, histogram MACD naik 2 bar (atau MACD di atas sinyal), penutupan di atas EMA20, breakout di atas high 3 bar sebelumnya, volume > 1,2× rata-rata 20 bar.

@@ -783,6 +783,40 @@ function syncControls() {
   $('#tgDiv').classList.toggle('on', state.showDiv); $('#tgSR').classList.toggle('on', state.showSR);
 }
 
+// ---------- pemisah chart / screener ----------
+(function initSplitter() {
+  const left = $('.left'), screener = $('.screener'), sp = $('#splitter');
+  const MIN_SCREENER = 110, MIN_CHART = 260;
+  let ratio = null;
+  try { const v = parseFloat(localStorage.getItem('idxsplit')); if (v > 0 && v < 1) ratio = v; } catch {}
+  const mobile = () => matchMedia('(max-width: 1100px)').matches;
+  const bounds = () => { const H = left.clientHeight - 12; return { H, min: MIN_SCREENER, max: Math.max(MIN_SCREENER, H - MIN_CHART) }; };
+  const apply = (px) => { const b = bounds(); px = Math.max(b.min, Math.min(b.max, px)); screener.style.flex = '0 0 ' + Math.round(px) + 'px'; return px; };
+  const applyRatio = () => { if (mobile()) { screener.style.flex = ''; return; } if (ratio != null) apply(ratio * bounds().H); };
+  const persist = (px) => { ratio = px / bounds().H; try { localStorage.setItem('idxsplit', String(ratio)); } catch {} };
+
+  sp.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || mobile()) return;
+    e.preventDefault(); sp.setPointerCapture(e.pointerId);
+    sp.classList.add('drag'); document.body.classList.add('resizing');
+    const move = (ev) => { const r = left.getBoundingClientRect(); apply(r.bottom - ev.clientY - 6); };
+    const up = (ev) => {
+      sp.releasePointerCapture?.(ev.pointerId); sp.classList.remove('drag'); document.body.classList.remove('resizing');
+      sp.removeEventListener('pointermove', move); sp.removeEventListener('pointerup', up); sp.removeEventListener('pointercancel', up);
+      persist(screener.getBoundingClientRect().height);
+    };
+    sp.addEventListener('pointermove', move); sp.addEventListener('pointerup', up); sp.addEventListener('pointercancel', up);
+  });
+  sp.addEventListener('dblclick', () => { ratio = null; screener.style.flex = ''; try { localStorage.removeItem('idxsplit'); } catch {} });
+  sp.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    persist(apply(screener.getBoundingClientRect().height + (e.key === 'ArrowUp' ? 28 : -28)));
+  });
+  new ResizeObserver(applyRatio).observe(left);
+  applyRatio();
+})();
+
 setInterval(() => { if (state.data?.marketOpen && !document.hidden) { loadStock(true); loadAnalysis(true); } }, 60000);
 
 syncControls(); syncType(); drawings.setSymbol(state.code); renderRangeBar(); renderScreener(); setTab(state.rtab); renderAnalysis(); renderHead();
